@@ -74,7 +74,6 @@ int main(int argc, char** argv) {
     
     //Calculate PMW duty cycle as 20% of (T2PR * 2)
     const unsigned short pwm_duty_cycle = (timer2_period * 2) / 5;
-    
     //Clear PWMxCON
     PWM5CON = 0;
     //PWM5 clock source is Timer2 (p359)
@@ -87,7 +86,7 @@ int main(int argc, char** argv) {
     //Wait until Timer2 overflows
     while (!TMR2IF);
     //Enable PWM5
-    PWM5CON = 0x80;
+    PWM5CONbits.EN = 1;
     
     //INIT SPI
     
@@ -96,34 +95,61 @@ int main(int argc, char** argv) {
     //Transfer 3 bytes
     SPI1TCNT = message_size;
     //Send 8 bits at a time
-    SPI1TWIDTH = 0x00;
+    SPI1TWIDTHbits.TWIDTH = 0;
     //2x frequency divider (Equation 32-1, p525)
     SPI1BAUD = 0x00;
-    //Enable SPI, MSB first, master, BMODE = 1
-    SPI1CON0 = 0x83;
+    //BMODE = 1, TWIDTH means number of bytes, not bits
+    SPI1CON0bits.BMODE = 1;
+    //SPI Master mode
+    SPI1CON0bits.MST = 1;
+    //MSB first
+    SPI1CON0bits.LSBF = 0;
     //Transmit only mode
-    SPI1CON2 = 0x02;
+    SPI1CON2bits.TXR = 1;
+    SPI1CON2bits.RXR = 0;
     //SPI clock source = Timer2
-    SPI1CLK = 0x05;
+    SPI1CLKbits.CLKSEL = 0x05;
+    //Enable SPI1
+    SPI1CON0bits.EN = 1;
     
     //INIT CLC
     
-    //Enable CLC1, logic function = OR-XOR
-    CLC1CON = 0x81;
-    //Do not output inverted signal
+    //Reset polarity
     CLC1POL = 0x00;     
-    //input0 = SCK, input1 = SDO, input2 = PWM5, input3 = undefined
-    CLC1SEL0 = 44;
-    CLC1SEL1 = 43;
-    CLC1SEL2 = 24;
-    //Gate0: SCK & nSDO & PWM5
-    CLC1GLS0 = 0x26;
-    //Gate1: SCK & SDO
-    CLC1GLS1 = 0x0A;
+    //input1 = SCK, input2 = SDO, input3 = PWM5, input4 = undefined
+    CLC1SEL0bits.D1S = 44;
+    CLC1SEL1bits.D2S = 43;
+    CLC1SEL2bits.D3S = 24;
+    //Gate0: SCK & nSDO & PWM5 = n(nSCK | SDO | nPWM5)
+    CLC1GLS0bits.G1D1N = 1;
+    CLC1GLS0bits.G1D1T = 0;
+    CLC1GLS0bits.G1D2N = 0;
+    CLC1GLS0bits.G1D2T = 1;
+    CLC1GLS0bits.G1D3N = 1;
+    CLC1GLS0bits.G1D3T = 0;
+    CLC1GLS0bits.G1D4N = 0;
+    CLC1GLS0bits.G1D4T = 0;
+    //Invert polarity, we want to AND the inputs
+    CLC1POLbits.G1POL = 1;
+    //Gate1: SCK & SDO = n(nSCK | nSDO)
+    CLC1GLS1bits.G2D1N = 1;
+    CLC1GLS1bits.G2D1T = 0;
+    CLC1GLS1bits.G2D2N = 1;
+    CLC1GLS1bits.G2D2T = 0;
+    CLC1GLS1bits.G2D3N = 0;
+    CLC1GLS1bits.G2D3T = 0;
+    CLC1GLS1bits.G2D4N = 0;
+    CLC1GLS1bits.G2D4T = 0;
+    //Invert polarity, we want to AND the inputs
+    CLC1POLbits.G2POL = 1;
     //Gate2 and Gate3: no input
     CLC1GLS2 = CLC1GLS3 = 0x00;
+    //OR-XOR mode (p439)
+    CLC1CONbits.MODE = 0b001;
     //Output CLC1 on pin RA1
     RA1PPS = 0x01;
+    //Enable CLC1
+    CLC1CONbits.EN = 1;
     
     //INIT DMA
     
