@@ -10,7 +10,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-const char color_table[] = {0x00, 0x00, 0xFF, 0x00, 0xFF, 0x00, 0xFF, 0x00, 0x00, 0x00, 0xFF, 0xFF};
+const char color_table[] = {
+    0x00, 0x00, 0xFF,
+    0x00, 0xFF, 0x00,
+    0xFF, 0x00, 0x00,
+    0x00, 0xFF, 0xFF
+};
 
 //Timer2 period = 19 for 2.5us bit time
 const unsigned char timer2_period = 19;
@@ -22,12 +27,11 @@ int main(int argc, char** argv) {
     PORTA = 0;
     LATA = 0;
     ANSELA = 0;
+    //All PORTA pins are digital outputs
+    TRISA = 0;
     
     PORTAbits.RA0 = 1;
     __delay_ms(500);
-    
-    //Port A is digital output, A2 is input
-    TRISA = 4; 
     
     //Enable DMA1 source count interrupt
     PIE2bits.DMA1SCNTIE = 1;
