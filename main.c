@@ -158,13 +158,13 @@ int main(int argc, char** argv) {
     DMA1CON1bits.SMR = 0; 
     //DMA1 source pointer increments after each transfer
     DMA1CON1bits.SMODE = 1; 
-    //Clear DMA1 SIRQEN when source counter reloads
-    //DMA1CON1bits.SSTP = 1; 
-    //Source size
+    //Stop transfers when source counter reloads (s15.5.2.3, p234)
+    DMA1CON1bits.SSTP = 1; 
+    //Source size: number of bytes to transfer
     DMA1SSZ = message_size;
     //Source address
     DMA1SSA = (volatile __int24) color_table;
-    //Destination size - 1 byte
+    //Destination size = 1 byte
     DMA1DSZ = 1;
     //Destination address - SPI TX buffer
     DMA1DSA = (volatile unsigned short) &SPI1TXB;
