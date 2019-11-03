@@ -113,6 +113,7 @@ int main(int argc, char** argv) {
     SPI1CON0bits.EN = 1;
     
     //INIT CLC
+    //Details in http://ww1.microchip.com/downloads/en/AppNotes/00001606A.pdf
     
     //Reset polarity
     CLC1POL = 0x00;     
