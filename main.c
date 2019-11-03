@@ -10,7 +10,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-const char color_table[] = {0x10, 0x22, 0xFF, 0x10, 0x22, 0xFF, 0x10, 0x22, 0xFF};
+const char color_table[] = {0x10, 0x22, 0xFF, 0x10, 0x22, 0xFF, 0x10, 0x22, 0xFF, 0x10, 0x22, 0xFF};
 
 //Timer2 period = 19 for 2.5us bit time
 const unsigned char timer2_period = 19;
@@ -23,22 +23,16 @@ int main(int argc, char** argv) {
     LATA = 0;
     ANSELA = 0;
     
+    PORTAbits.RA0 = 1;
+    __delay_ms(500);
+    
     //Port A is digital output, A2 is input
     TRISA = 4; 
     
     //Enable DMA1 source count interrupt
     PIE2bits.DMA1SCNTIE = 1;
     
-    
-    //LED and Frequency tester
-    /*while(1) {
-        RA0 = 1;
-        __delay_ms(500);
-        RA0 = 0;
-        __delay_ms(500);
-    }*/
-    
-    const int message_size = 3;
+    const int message_size = 12;
     
     //Grant memory access to DMA1 and set it to highest priority
     
@@ -67,7 +61,7 @@ int main(int argc, char** argv) {
     //Start timer, no pre-scaler, no post-scaler
     T2CONbits.OUTPS = 0;
     T2CONbits.CKPS = 0;
-    T2CONbits.ON = 0x80;
+    T2CONbits.ON = 1;
     
     //INIT PWM5
     //(s24.1.10, p357)
@@ -83,8 +77,6 @@ int main(int argc, char** argv) {
     //This means, we have to shift the value by 6 bits that are unused in
     //PWM5DCL
     PWM5DC = pwm_duty_cycle << _PWM5DCL_DC_POSITION;
-    //Wait until Timer2 overflows
-    while (!TMR2IF);
     //Enable PWM5
     PWM5CONbits.EN = 1;
     
@@ -154,10 +146,12 @@ int main(int argc, char** argv) {
     
     //INIT DMA
     
-    //DMA1 source memory region is GPR/SFR
+    //DMA1 source memory region is GPR/SFR (really?)
     DMA1CON1bits.SMR = 0; 
     //DMA1 source pointer increments after each transfer
-    DMA1CON1bits.SMODE = 1; 
+    DMA1CON1bits.SMODE = 1;
+    //DMA1 destination pointer remains unchanged
+    DMA1CON1bits.DMODE = 0;
     //Stop transfers when source counter reloads (s15.5.2.3, p234)
     DMA1CON1bits.SSTP = 1; 
     //Source size: number of bytes to transfer
@@ -171,11 +165,15 @@ int main(int argc, char** argv) {
     //Trigger DMA start on SPI transfer complete
     DMA1SIRQ = 21;
     
+    //Enable transfer start on hardware interrupt request
+    DMA1CON0bits.SIRQEN = 1;
+    //Enable DMA1
+    DMA1CON0bits.EN = 1;
+    //Start DMA transfer
+    DMA1CON0bits.DGO = 1;
+    
     //Enable global interrupts
     ei();
-    
-    //Enable and start DMA
-    DMA1CON0 = 0xC0;
     
     while(1);
     
@@ -184,9 +182,10 @@ int main(int argc, char** argv) {
 
 void __interrupt(irq(16)) DMA1SCNT_ISR() {
     complete = 1;
-    DMA1CON0 = 0;
-    /*PIR2bits.DMA1SCNTIF = 0;
-    T2CONbits.T2ON = 0; //Stop Timer2
+    PORTAbits.RA2 = 1;
+    PIR2bits.DMA1SCNTIF = 0;
+    
+    /*T2CONbits.T2ON = 0; //Stop Timer2
     SPI1CON0bits.EN = 0;
     PORTAbits.RA0 = 1;*/
 }
