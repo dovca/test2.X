@@ -10,7 +10,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-const char color_table[] = {0x10, 0x22, 0xFF, 0x10, 0x22, 0xFF, 0x10, 0x22, 0xFF, 0x10, 0x22, 0xFF};
+const char color_table[] = {0x00, 0x00, 0xFF, 0x00, 0xFF, 0x00, 0xFF, 0x00, 0x00, 0x00, 0xFF, 0xFF};
 
 //Timer2 period = 19 for 2.5us bit time
 const unsigned char timer2_period = 19;
@@ -146,8 +146,8 @@ int main(int argc, char** argv) {
     
     //INIT DMA
     
-    //DMA1 source memory region is GPR/SFR (really?)
-    DMA1CON1bits.SMR = 0; 
+    //DMA1 source memory region is PFM (really?)
+    DMA1CON1bits.SMR = 0b01; 
     //DMA1 source pointer increments after each transfer
     DMA1CON1bits.SMODE = 1;
     //DMA1 destination pointer remains unchanged
