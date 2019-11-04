@@ -14,9 +14,9 @@ const char color_table[] = {
     /*
     B     R     G
     */ 
-    0x00, 0x00, 0xFF, //3
-    0xFF, 0xFF, 0x00, //6
-    0x00, 0x00, 0xFF, //9
+    0x23, 0xF3, 0x11, //3
+    0x99, 0x46, 0x57, //6
+    0x04, 0x13, 0x71, //9
     0x00, 0x00, 0x00, //12
 
     0x00, 0xFF, 0xFF, //15
@@ -35,17 +35,16 @@ const char color_table[] = {
     0x00, 0xFF, 0x00, //48
     
     0x88, 0xFF, 0x88, //51
-    0xFF, 0x00, 0xFF, //54
-    0x10, 0x10, 0x10, //57
-    0x14, 0x7A, 0xDF, //60
+    0xFF, 0x00, 0xFF  //54
 };
 
-const int message_size = sizeof color_table;
+volatile char message_size = 12; //sizeof color_table;
 
 //Timer2 period = 19 for 2.5us bit time
 const unsigned char timer2_period = 19;
 
-volatile char complete = 0;
+volatile char dma_transfer_complete = 0;
+volatile char spi_transfer_complete = 0;
 
 void reset_ports() {
     //Clear Port A output
@@ -75,21 +74,7 @@ void init_timer2() {
 }
 
 void init_dma1() {
-    //Grant memory access to DMA1 and set it to highest priority
-    
-    //DMA1 has the highest priority (lowest number, s3.1 p28)
-    DMA1PR = 0; 
-    //ISR priority must be higher than Main priority (s3.2 p29 Note)
-    ISRPR = 1; 
-    //Main program has the lowest priority
-    MAINPR = 2;
-    //Special sequence to allow changes to PRLOCKED(Example 3-1 p29)
-    PRLOCK = 0x55; 
-    PRLOCK = 0xAA;
-    //Lock the priorities in PRLOCK
-    PRLOCKbits.PRLOCKED = 1;
-    
-    //DMA1 source memory region is PFM (really?)
+    //DMA1 source memory region is PFM
     DMA1CON1bits.SMR = 0b01; 
     //DMA1 source pointer increments after each transfer
     DMA1CON1bits.SMODE = 1;
@@ -111,10 +96,6 @@ void init_dma1() {
     DMA1CON0bits.SIRQEN = 1;
     //Enable DMA1 source count interrupt
     PIE2bits.DMA1SCNTIE = 1;
-    //Enable DMA1
-    DMA1CON0bits.EN = 1;
-    //Start DMA transfer
-    DMA1CON0bits.DGO = 1;
 }
 
 void init_clc1() {
@@ -201,26 +182,71 @@ void init_pwm5() {
     PWM5CONbits.EN = 1;
 }
 
+void start_dma_transfer() {
+    while (!PIR4bits.TMR2IF);
+    //Enable transfer start on hardware interrupt request
+    DMA1CON0bits.SIRQEN = 1;
+    //Enable DMA1
+    DMA1CON0bits.EN = 1;
+    //Start DMA transfer
+    DMA1CON0bits.DGO = 1;
+}
+
 int main(int argc, char** argv) {
+    //Grant memory access to DMA1 and set it to highest priority
+    
+    //DMA1 has the highest priority (lowest number, s3.1 p28)
+    DMA1PR = 0; 
+    //ISR priority must be higher than Main priority (s3.2 p29 Note)
+    ISRPR = 1; 
+    //Main program has the lowest priority
+    MAINPR = 2;
+    //Special sequence to allow changes to PRLOCKED(Example 3-1 p29)
+    PRLOCK = 0x55; 
+    PRLOCK = 0xAA;
+    //Lock the priorities in PRLOCK
+    PRLOCKbits.PRLOCKED = 1;
+    
     reset_ports();
 
     init_timer2();
     init_pwm5();
     init_spi1();
     init_clc1();
-    init_dma1();
     
     //Enable global interrupts
     ei();
     
-    while(1);
+    while(1) {
+        spi_transfer_complete = 0;
+        
+        init_dma1();
+        start_dma_transfer();
+
+        while(!(SPI1INTEbits.SRMTIE && SPI1INTFbits.SRMTIF));
+        
+
+       /* for (int i = 0, l = sizeof color_table; i < l; i++) {
+            color_table[i] += 10;
+        }*/
+        
+        //message_size += 3;
+
+        __delay_ms(30);
+    }
     
     return (EXIT_SUCCESS);
 }
 
 void __interrupt(irq(16)) DMA1SCNT_ISR() {
-    complete = 1;
-    PORTAbits.RA2 = 1;
+    dma_transfer_complete = 1;
+    PORTAbits.RA1 = 0;
     PIR2bits.DMA1SCNTIF = 0;
+}
+
+void __interrupt(irq(22)) SPI1TX_ISR() {
+    if (SPI1INTEbits.SRMTIE && SPI1INTFbits.SRMTIF) {
+        spi_transfer_complete = 1;
+    }
 }
 
