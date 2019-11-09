@@ -10,35 +10,35 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-const char color_table[] = {
+char color_table[] = {
     /*
     B     R     G
     */ 
-    0x23, 0xF3, 0x11, //3
-    0x99, 0x46, 0x57, //6
-    0x04, 0x13, 0x71, //9
-    0x00, 0x00, 0x00, //12
+    0xFF, 0x80, 0xFF, //3
+    0xA0, 0x80, 0x33, //6
+    0xFF, 0xA0, 0x00, //9
+    0x0F, 0xDD, 0xE0, //12
 
-    0x00, 0xFF, 0xFF, //15
-    0xFF, 0xFF, 0xFF, //18
-    0x00, 0xFF, 0xFF, //21
-    0x00, 0x00, 0xFF, //24
+    0x00, 0x8F, 0x3F, //15
+    0xFF, 0xF0, 0x44, //18
+    0x04, 0x4F, 0xEE, //21
+    0xC0, 0x00, 0x7F, //24
     
-    0x00, 0x00, 0x00, //27
-    0xFF, 0x00, 0x00, //30
-    0xFF, 0x88, 0x00, //33
-    0xFF, 0x88, 0x88, //36
+    0x77, 0x05, 0x00, //27
+    0xFF, 0x0A, 0x0B, //30
+    0xAA, 0x8C, 0x00, //33
+    0xFF, 0x88, 0xC8, //36
     
-    0xFF, 0xFF, 0x88, //39
-    0xFF, 0xFF, 0xFF, //42
-    0x00, 0x00, 0x00, //45
-    0x00, 0xFF, 0x00, //48
+    0xC0, 0xFF, 0x88, //39
+    0x22, 0xDF, 0xFF, //42
+    0x00, 0x2D, 0x54, //45
+    0x58, 0xA3, 0x00, //48
     
-    0x88, 0xFF, 0x88, //51
-    0xFF, 0x00, 0xFF  //54
+    0xBC, 0x79, 0x88, //51
+    0xCF, 0x60, 0xFF  //54
 };
 
-volatile char message_size = 12; //sizeof color_table;
+volatile char message_size = sizeof color_table;
 
 //Timer2 period = 19 for 2.5us bit time
 const unsigned char timer2_period = 19;
@@ -74,8 +74,8 @@ void init_timer2() {
 }
 
 void init_dma1() {
-    //DMA1 source memory region is PFM
-    DMA1CON1bits.SMR = 0b01; 
+    //DMA1 source memory region is GPR
+    DMA1CON1bits.SMR = 0b00; 
     //DMA1 source pointer increments after each transfer
     DMA1CON1bits.SMODE = 1;
     //DMA1 destination pointer remains unchanged
@@ -85,7 +85,7 @@ void init_dma1() {
     //Source size: number of bytes to transfer
     DMA1SSZ = message_size;
     //Source address
-    DMA1SSA = (volatile __int24) color_table;
+    DMA1SSA = color_table;
     //Destination size = 1 byte
     DMA1DSZ = 1;
     //Destination address - SPI TX buffer
@@ -183,7 +183,7 @@ void init_pwm5() {
 }
 
 void start_dma_transfer() {
-    while (!PIR4bits.TMR2IF);
+    //while (!PIR4bits.TMR2IF);
     //Enable transfer start on hardware interrupt request
     DMA1CON0bits.SIRQEN = 1;
     //Enable DMA1
@@ -218,21 +218,18 @@ int main(int argc, char** argv) {
     ei();
     
     while(1) {
-        spi_transfer_complete = 0;
+        dma_transfer_complete = 0;
         
         init_dma1();
         start_dma_transfer();
 
-        while(!(SPI1INTEbits.SRMTIE && SPI1INTFbits.SRMTIF));
-        
+        while(!dma_transfer_complete);
 
-       /* for (int i = 0, l = sizeof color_table; i < l; i++) {
-            color_table[i] += 10;
-        }*/
-        
-        //message_size += 3;
+        for (int i = 0, l = sizeof color_table; i < l; i++) {
+            color_table[i] += 3;
+        }
 
-        __delay_ms(30);
+        __delay_ms(20);
     }
     
     return (EXIT_SUCCESS);
@@ -240,13 +237,13 @@ int main(int argc, char** argv) {
 
 void __interrupt(irq(16)) DMA1SCNT_ISR() {
     dma_transfer_complete = 1;
+    
+    //Clear output
     PORTAbits.RA1 = 0;
+    
+    //Disable DMA
     PIR2bits.DMA1SCNTIF = 0;
+    DMA1CON0bits.SIRQEN = 0;
+    DMA1CON0bits.EN = 0;
+    DMA1CON0bits.DGO = 0;
 }
-
-void __interrupt(irq(22)) SPI1TX_ISR() {
-    if (SPI1INTEbits.SRMTIE && SPI1INTFbits.SRMTIF) {
-        spi_transfer_complete = 1;
-    }
-}
-
