@@ -6,7 +6,6 @@
  */
 
 #include "config.h"
-#include <xc.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -14,28 +13,29 @@ char color_table[] = {
     /*
     B     R     G
     */ 
-    0xFF, 0x80, 0xFF, //3
-    0xA0, 0x80, 0x33, //6
-    0xFF, 0xA0, 0x00, //9
-    0x0F, 0xDD, 0xE0, //12
-
-    0x00, 0x8F, 0x3F, //15
-    0xFF, 0xF0, 0x44, //18
-    0x04, 0x4F, 0xEE, //21
-    0xC0, 0x00, 0x7F, //24
+    0xFF, 0x00, 0x00,
+    0xFF, 0x00, 0x00,
+    0xFF, 0x00, 0x00,
+    0xFF, 0x00, 0x00,
     
-    0x77, 0x05, 0x00, //27
-    0xFF, 0x0A, 0x0B, //30
-    0xAA, 0x8C, 0x00, //33
-    0xFF, 0x88, 0xC8, //36
+    0xFF, 0x00, 0x00,
+    0xFF, 0x00, 0x00,
+    0xFF, 0x00, 0x00,
+    0xFF, 0x00, 0x00,
     
-    0xC0, 0xFF, 0x88, //39
-    0x22, 0xDF, 0xFF, //42
-    0x00, 0x2D, 0x54, //45
-    0x58, 0xA3, 0x00, //48
+    0xFF, 0x00, 0x00,
+    0xFF, 0x00, 0x00,
+    0xFF, 0x00, 0x00,
+    0xFF, 0x00, 0x00,
     
-    0xBC, 0x79, 0x88, //51
-    0xCF, 0x60, 0xFF  //54
+    0xFF, 0x00, 0x00,
+    0xFF, 0x00, 0x00,
+    0xFF, 0x00, 0x00,
+    0xFF, 0x00, 0x00,
+    
+    0xFF, 0x00, 0x00,
+    0xFF, 0x00, 0x00,
+    
 };
 
 volatile char message_size = sizeof color_table;
@@ -46,6 +46,9 @@ const unsigned char timer2_period = 19;
 volatile char dma_transfer_complete = 0;
 volatile char spi_transfer_complete = 0;
 
+volatile char button_state_change = 0;
+volatile char current_button_state = 0;
+
 void reset_ports() {
     //Clear Port A output
     PORTA = 0;
@@ -53,9 +56,10 @@ void reset_ports() {
     ANSELA = 0;
     //All PORTA pins are digital outputs
     TRISA = 0;
+    //A0 is digital input
+    TRISAbits.TRISA0 = 1;
     
-    PORTAbits.RA0 = 1;
-    __delay_ms(500);
+    __delay_ms(50);
 }
 
 void init_timer2() {
@@ -182,6 +186,25 @@ void init_pwm5() {
     PWM5CONbits.EN = 1;
 }
 
+void init_timer0() {
+    //Timer0 acts as a timer for polling input pins and debouncing
+    
+    //8-bit mode
+    T0CON0bits.MD16 = 0;
+    //32kHz clock source (LFINTOSC)
+    T0CON1bits.CS = 0b100;
+    //1:256 prescaler
+    T0CON1bits.CKPS = 0b1000;
+    //Reset timer count
+    TMR0L = 0;
+    //Set period to 1
+    TMR0H = 1;
+    //Enable Timer0 interrupts
+    PIE3bits.TMR0IE = 1;
+    //Enable Timer0
+    T0CON0bits.EN = 1;
+}
+
 void start_dma_transfer() {
     //while (!PIR4bits.TMR2IF);
     //Enable transfer start on hardware interrupt request
@@ -190,6 +213,10 @@ void start_dma_transfer() {
     DMA1CON0bits.EN = 1;
     //Start DMA transfer
     DMA1CON0bits.DGO = 1;
+}
+
+char check_button_press() {
+    
 }
 
 int main(int argc, char** argv) {
@@ -213,6 +240,7 @@ int main(int argc, char** argv) {
     init_pwm5();
     init_spi1();
     init_clc1();
+    init_timer0();
     
     //Enable global interrupts
     ei();
@@ -225,17 +253,23 @@ int main(int argc, char** argv) {
 
         while(!dma_transfer_complete);
 
-        for (int i = 0, l = sizeof color_table; i < l; i++) {
-            color_table[i] += 3;
+        while (button_state_change != 1);
+        
+        const char l = sizeof color_table;
+        char tmp = color_table[l - 1];
+        
+        for (int i = l - 1; i >= 0; i--) {
+            color_table[i] = color_table[i - 1];
         }
-
-        __delay_ms(20);
+        
+        color_table[0] = tmp;
+        
     }
     
     return (EXIT_SUCCESS);
 }
 
-void __interrupt(irq(16)) DMA1SCNT_ISR() {
+void __interrupt(irq(DMA1SCNT)) DMA1SCNT_ISR() {
     dma_transfer_complete = 1;
     
     //Clear output
@@ -246,4 +280,17 @@ void __interrupt(irq(16)) DMA1SCNT_ISR() {
     DMA1CON0bits.SIRQEN = 0;
     DMA1CON0bits.EN = 0;
     DMA1CON0bits.DGO = 0;
+}
+
+void __interrupt(irq(TMR0)) TMR0_ISR() {
+    PIR3bits.TMR0IF = 0;
+    char new_btn_state = PORTAbits.RA0;
+    
+    if (current_button_state == new_btn_state) {
+        button_state_change = 0;
+    } else {
+        button_state_change = new_btn_state - current_button_state;
+    }
+    
+    current_button_state = new_btn_state;
 }
